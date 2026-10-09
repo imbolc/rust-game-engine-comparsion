@@ -26,5 +26,8 @@ bevy = { version = "0.19.1", default-features = false, features = [
 web-time = "1.1"
 
 [profile.release]
-opt-level = "s"
-lto = "thin"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

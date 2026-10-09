@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Tetris - Fyrox</title>
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0d0f17; }
+      canvas { display: block; width: 100vw !important; height: 100dvh !important; touch-action: none; outline: none; }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      // Fyrox creates its own audio context. Resume it inside a browser gesture.
+      const contexts = [];
+      const NativeAudioContext = window.AudioContext;
+      window.AudioContext = class extends NativeAudioContext {
+        constructor(...args) { super(...args); contexts.push(this); }
+      };
+      for (const event of ['pointerdown', 'keydown']) {
+        window.addEventListener(event, () => {
+          for (const context of contexts) context.resume();
+        });
+      }
+      import init, { start } from './pkg/tetris_fyrox.js';
+      await init();
+      start();
+    </script>
+  </body>
+</html>

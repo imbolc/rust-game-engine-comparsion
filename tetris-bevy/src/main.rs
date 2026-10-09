@@ -57,7 +57,7 @@ const KEYS: [(KeyCode, Action); 5] = [
     (KeyCode::ArrowLeft, Action::Left),
     (KeyCode::ArrowRight, Action::Right),
     (KeyCode::ArrowUp, Action::Rotate),
-    (KeyCode::Space, Action::Drop),
+    (KeyCode::ArrowDown, Action::Drop),
     (KeyCode::KeyR, Action::Restart),
 ];
 
@@ -77,8 +77,23 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.05, 0.06, 0.09)))
         .init_resource::<Session>()
         .add_systems(Startup, setup)
+        .add_systems(
+            PreUpdate,
+            prioritize_touch
+                .after(bevy::input::InputSystems)
+                .before(bevy::ui::UiSystems::Focus),
+        )
         .add_systems(Update, (resize, play, draw).chain())
         .run();
+}
+
+fn prioritize_touch(touches: Res<bevy::input::touch::Touches>, mut windows: Query<&mut Window>) {
+    // UI focus otherwise prefers a stale mouse cursor over the active finger.
+    if touches.first_pressed_position().is_some() {
+        for mut window in &mut windows {
+            window.set_cursor_position(None);
+        }
+    }
 }
 
 fn seed() -> u64 {
@@ -160,7 +175,7 @@ fn setup(mut commands: Commands, mut pitches: ResMut<Assets<Pitch>>) {
                 ))
                 .with_child((Text::new("Restart"), font(18.0)));
                 ui.spawn((
-                    Text::new("Left/Right: move | Up: rotate | Space: drop"),
+                    Text::new("Left/Right: move | Up: rotate | Down: drop"),
                     font(12.0),
                 ));
             });
@@ -338,7 +353,7 @@ mod tests {
         assert_eq!(world.query::<&Cell>().iter(world).count(), WIDTH * HEIGHT);
         world
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::Space);
+            .press(KeyCode::ArrowDown);
         app.update();
         assert_eq!(
             app.world()
@@ -355,7 +370,7 @@ mod tests {
         let world = app.world_mut();
         world
             .resource_mut::<ButtonInput<KeyCode>>()
-            .reset(KeyCode::Space);
+            .reset(KeyCode::ArrowDown);
         {
             let mut session = world.resource_mut::<Session>();
             session.game.over = true;
@@ -395,6 +410,82 @@ mod tests {
     }
 
     #[test]
+    fn touch_focus_restarts_with_a_stale_mouse_cursor_at_high_dpi() {
+        use bevy::{
+            app::HierarchyPropagatePlugin,
+            input::{
+                InputPlugin,
+                touch::{TouchInput, TouchPhase},
+            },
+            ui::{
+                ComputedUiTargetCamera, UiStack, ui_focus_system,
+                update::propagate_ui_target_cameras,
+            },
+            window::PrimaryWindow,
+        };
+
+        let mut app = headless_app();
+        app.add_plugins((
+            InputPlugin,
+            HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(PostUpdate),
+        ))
+        .init_resource::<UiStack>()
+        .add_systems(PostUpdate, propagate_ui_target_cameras)
+        .add_systems(
+            PreUpdate,
+            (prioritize_touch, ui_focus_system)
+                .chain()
+                .after(bevy::input::InputSystems),
+        );
+        let world = app.world_mut();
+        let window = world
+            .query_filtered::<Entity, With<Window>>()
+            .single(world)
+            .unwrap();
+        world.entity_mut(window).insert(PrimaryWindow);
+        {
+            let mut window = world.get_mut::<Window>(window).unwrap();
+            window.resolution = (400, 800).into();
+            window
+                .resolution
+                .set_scale_factor_and_apply_to_physical_size(2.0);
+            window.set_cursor_position(Some(Vec2::new(10.0, 10.0)));
+        }
+        let restart = world
+            .query::<(Entity, &Action)>()
+            .iter(world)
+            .find_map(|(entity, action)| matches!(action, Action::Restart).then_some(entity))
+            .unwrap();
+        world.entity_mut(restart).insert((
+            ComputedNode {
+                size: Vec2::new(220.0, 88.0),
+                ..default()
+            },
+            UiGlobalTransform::from_translation(Vec2::new(400.0, 1468.0)),
+            InheritedVisibility::VISIBLE,
+        ));
+        world.insert_resource(UiStack {
+            partition: std::iter::once(0..1).collect(),
+            uinodes: vec![restart],
+        });
+        world.resource_mut::<Session>().game.drop();
+        app.update();
+        app.update();
+        app.world_mut().write_message(TouchInput {
+            phase: TouchPhase::Started,
+            position: Vec2::new(200.0, 734.0),
+            window,
+            force: None,
+            id: 1,
+        });
+        app.update();
+        assert_eq!(
+            app.world().resource::<Session>().game.board,
+            [[0; WIDTH]; HEIGHT]
+        );
+    }
+
+    #[test]
     fn elapsed_time_moves_the_active_piece_down() {
         let mut app = headless_app();
         let before = app.world().resource::<Session>().game.blocks();
@@ -423,7 +514,7 @@ mod tests {
         }
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::Space);
+            .press(KeyCode::ArrowDown);
         app.update();
         let world = app.world_mut();
         assert_eq!(world.resource::<Session>().game.score, 100);

@@ -32,7 +32,7 @@ cargo run --manifest-path tetris-bevy/Cargo.toml
 | --- | --- |
 | Left / Right | Move horizontally |
 | Up | Rotate clockwise |
-| Space | Drop instantly |
+| Down | Drop instantly |
 | R | Restart |
 
 The on-screen buttons support mouse and touch. Hold a movement button or key

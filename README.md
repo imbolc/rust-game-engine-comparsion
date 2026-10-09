@@ -8,7 +8,7 @@ is meant to look and behave exactly the same on every engine.
 
 ## Game engines
 
-- <https://github.com/bevyengine/bevy>
+- <https://github.com/bevyengine/bevy> ([Tetris implementation](tetris-bevy/README.md))
 - <https://github.com/FyroxEngine/Fyrox>
 - <https://github.com/not-fl3/macroquad>
 
